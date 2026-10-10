@@ -1454,6 +1454,31 @@ mod smoke {
     }
 
     #[test]
+    fn voltage_slider_sets_within_safety_range() {
+        let (mut app, sim, ctx) = rig();
+        connect(&mut app, &ctx);
+        app.settings.safety = dc3005u_proto::SafetyLimits { v_min: 9.0, v_max: 12.0, i_min: 0.5, i_max: 5.0 };
+        app.apply_settings();
+        frame(&mut app, &ctx);
+        crate::ui::output_panel::set_voltage_pct(&mut app, 100.0 / 3.0);
+        assert_eq!(app.sp.text[0], "10.000");
+        app.commit(Qty::Voltage, Source::Manual);
+        until(&mut app, &ctx, "10 V confirmed", |a| a.sp.device_value(Qty::Voltage, &a.cali) == Some(10.0));
+        assert_eq!(sim.state().set_mv, 10_000);
+        crate::ui::output_panel::set_voltage_pct(&mut app, 100.0);
+        assert_eq!(app.sp.text[0], "12.000");
+
+        // 百分比框放得下「100.0」
+        ctx.set_pixels_per_point(1.25);
+        frame(&mut app, &ctx);
+        frame(&mut app, &ctx);
+        let rect = ctx.read_response(egui::Id::new("v_slider_pct")).expect("pct field").rect;
+        let font = egui::TextStyle::Monospace.resolve(&ctx.global_style());
+        let text_w = ctx.fonts_mut(|f| f.layout_no_wrap("100.0".into(), font, egui::Color32::WHITE).size().x);
+        assert!(rect.width() >= text_w + 8.0, "field {} < text {text_w}", rect.width());
+    }
+
+    #[test]
     fn narrowed_limits_block_on() {
         let (mut app, _sim, ctx) = rig();
         connect(&mut app, &ctx);

@@ -101,6 +101,7 @@ fn output_section(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
     for (k, q) in [Qty::Voltage, Qty::Current].into_iter().enumerate() {
         setpoint_row(app, ui, pal, q, editable, invalid[k]);
     }
+    voltage_slider(app, ui, pal, editable);
 
     // 设备设定
     let dev_line = match (app.sp.device_value(Qty::Voltage, &app.cali), app.sp.device_value(Qty::Current, &app.cali)) {
@@ -256,6 +257,75 @@ fn setpoint_row(app: &mut App, ui: &mut egui::Ui, pal: &Palette, q: Qty, editabl
     }
 }
 
+fn volt_to_pct(v: f64, min: f64, max: f64) -> f64 {
+    if max > min { ((v - min) / (max - min) * 100.0).clamp(0.0, 100.0) } else { 0.0 }
+}
+
+fn pct_to_volt(pct: f64, min: f64, max: f64) -> f64 {
+    min + pct.clamp(0.0, 100.0) / 100.0 * (max - min)
+}
+
+/// 把设定电压编辑值改为安全边界电压范围内的 `pct`%（只改编辑值，不下发）
+pub(crate) fn set_voltage_pct(app: &mut App, pct: f64) {
+    let (min, max) = app.settings.safety.range(Qty::Voltage);
+    app.sp.text[0] = milli3(pct_to_volt(pct, min, max));
+    app.sp.on_user_edit(Qty::Voltage);
+}
+
+/// 电压滑条：0~100% 对应安全边界电压范围；拖动时设定框跟着变，松开或输入百分比后下发一次
+fn voltage_slider(app: &mut App, ui: &mut egui::Ui, pal: &Palette, editable: bool) {
+    let (min, max) = app.settings.safety.range(Qty::Voltage);
+    let enabled = editable && app.connected() && max > min;
+    let v = app.sp.edit_value(Qty::Voltage).or_else(|| app.sp.device_value(Qty::Voltage, &app.cali)).unwrap_or(min);
+    let mut pct = volt_to_pct(v, min, max);
+    let pct_id = egui::Id::new("v_slider_pct");
+    let mut send = false;
+    ui.horizontal(|ui| {
+        ui.add_sized([72.0, 20.0], egui::Label::new(t("set_slider")));
+        let font = egui::TextStyle::Monospace.resolve(ui.style());
+        let field_w = ui.ctx().fonts_mut(|f| f.glyph_width(&font, '0')) * 5.0 + 8.0;
+        let gap = ui.spacing().item_spacing.x;
+        let margin = 2.0 * ui.spacing().button_padding.x;
+        ui.spacing_mut().slider_width = (ui.available_width() - field_w - margin - 16.0 - 3.0 * gap).max(60.0);
+        let tip = tf("set_slider_tip", &[("min", &trim_num(min)), ("max", &trim_num(max))]);
+        let r = ui.add_enabled(enabled, egui::Slider::new(&mut pct, 0.0..=100.0).show_value(false)).on_hover_text(&tip);
+        if r.changed() {
+            set_voltage_pct(app, pct);
+        }
+        send |= r.drag_stopped() || (r.changed() && !r.dragged());
+
+        let mut text = ui.data(|d| d.get_temp::<String>(pct_id)).unwrap_or_default();
+        if !ui.memory(|m| m.has_focus(pct_id)) {
+            text = format!("{pct:.1}");
+        }
+        let r = ui
+            .add_enabled(
+                enabled,
+                egui::TextEdit::singleline(&mut text)
+                    .id(pct_id)
+                    .desired_width(field_w)
+                    .font(egui::TextStyle::Monospace),
+            )
+            .on_hover_text(&tip);
+        let parsed = text.trim().parse::<f64>().ok().filter(|p| (0.0..=100.0).contains(p));
+        if parsed.is_none() {
+            widgets::red_frame(ui, &r, pal);
+        }
+        if r.lost_focus()
+            && text.trim() != format!("{pct:.1}")
+            && let Some(p) = parsed
+        {
+            set_voltage_pct(app, p);
+            send = true;
+        }
+        ui.data_mut(|d| d.insert_temp(pct_id, text));
+        ui.label("%");
+    });
+    if send {
+        app.commit(Qty::Voltage, Source::Manual);
+    }
+}
+
 fn progress(app: &App, ui: &mut egui::Ui, q: Qty) {
     let (meas, set, unit) = match q {
         Qty::Voltage => (app.status.v, app.sp.device_value(q, &app.cali), "V"),
@@ -271,4 +341,21 @@ fn progress(app: &App, ui: &mut egui::Ui, q: Qty) {
         _ => format!("-- / -- {unit}"),
     };
     ui.add(egui::ProgressBar::new(frac).text(text));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slider_maps_safety_range() {
+        assert!((pct_to_volt(100.0 / 3.0, 9.0, 12.0) - 10.0).abs() < 1e-9);
+        assert_eq!(pct_to_volt(0.0, 9.0, 12.0), 9.0);
+        assert_eq!(pct_to_volt(150.0, 9.0, 12.0), 12.0);
+        assert!((volt_to_pct(10.5, 9.0, 12.0) - 50.0).abs() < 1e-9);
+        // 设定在边界外时滑块停在端点；边界上下限相同时为 0
+        assert_eq!(volt_to_pct(5.0, 9.0, 12.0), 0.0);
+        assert_eq!(volt_to_pct(20.0, 9.0, 12.0), 100.0);
+        assert_eq!(volt_to_pct(5.0, 5.0, 5.0), 0.0);
+    }
 }

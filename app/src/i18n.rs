@@ -133,6 +133,12 @@ static TABLE: &[(&str, &str, &str)] = &[
     ("dev_off_on_connect", "首次连接时关闭输出", "Turn output off on first connect"),
     ("dev_identity", "型号 {model}  序列号 {serial}  固件 {fw}", "Model {model}  S/N {serial}  FW {fw}"),
     ("dev_id_line", "ID {serial}  固件 {fw}", "ID {serial}  FW {fw}"),
+    ("set_slider", "电压调节", "V Adjust"),
+    (
+        "set_slider_tip",
+        "0~100% 对应安全边界 {min}~{max} V；拖动时设定电压跟着变，松开或在右侧输入百分比后下发",
+        "0~100% maps to the safety range {min}~{max} V; the voltage box follows while dragging and is sent on release or when a percentage is entered",
+    ),
     ("dev_cmd_stats", "命令统计：成功 {ok} / 超时 {to} / 无效 {bad}，平均 {rtt} ms", "Commands: ok {ok} / timeout {to} / invalid {bad}, avg {rtt} ms"),
     ("gfx_language", "界面语言", "Language"),
     ("gfx_theme", "界面主题", "UI Theme"),
