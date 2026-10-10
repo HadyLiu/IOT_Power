@@ -12,6 +12,11 @@ rm -rf dist/linux dist/windows
 mkdir -p dist/linux dist/windows
 cp -f target/release/iot-power dist/linux/
 cp -f target/x86_64-pc-windows-gnu/release/iot-power.exe dist/windows/
+# 便携版附带图标（Linux 桌面快捷方式可用；Windows 图标已嵌入 exe）
+mkdir -p dist/linux/icons
+cp -f packaging/icons/iot-power.svg packaging/icons/png/256x256.png dist/linux/icons/
+cp -f packaging/linux/iot-power.desktop dist/linux/
+cp -f packaging/linux/iot-power-portable.desktop dist/linux/iot-power.desktop.portable
 
 linux_pkg="dist/IOT_Power-${version}-linux-x86_64.tar.gz"
 win_pkg="dist/IOT_Power-${version}-windows-x64.zip"

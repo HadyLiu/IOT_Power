@@ -6,5 +6,6 @@ Comment=DC3005U power supply controller
 Comment[zh_CN]=DC3005U 可调电源上位机
 Exec=iot-power
 Icon=iot-power
+StartupWMClass=iot-power
 Terminal=false
 Categories=Utility;Electronics;

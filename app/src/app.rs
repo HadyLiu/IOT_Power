@@ -1204,14 +1204,6 @@ impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.handle_events(ctx);
         self.hotkeys(ctx);
-        if std::env::var_os("IOT_DBG_PANEL").is_some() {
-            if matches!(self.link, LinkState::Disconnected) && self.sim.is_some() {
-                self.connect();
-            }
-            let w = egui::containers::panel::PanelState::load(ctx, egui::Id::new("left")).map(|s| s.size().x);
-            log::warn!("DBG left={w:?} screen={:?}", ctx.content_rect().width());
-        }
-
         let dropped: Vec<PathBuf> = ctx.input(|i| {
             i.raw
                 .dropped_files
@@ -1486,6 +1478,8 @@ mod smoke {
     fn left_panel_width_is_stable() {
         let (mut app, _sim, ctx) = rig();
         connect(&mut app, &ctx);
+        // 非整数缩放下取整误差会让溢出的内容逐帧撑宽侧栏（1.0 时复现不了）
+        ctx.set_pixels_per_point(1.25);
         let input = || egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0))),
             ..Default::default()

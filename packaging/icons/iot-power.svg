@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2e3744"/>
+      <stop offset="1" stop-color="#141920"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="232" height="232" rx="52" fill="url(#bg)" stroke="#4a5563" stroke-width="3"/>
+  <rect x="36" y="40" width="184" height="106" rx="14" fill="#0a0e13" stroke="#333b46" stroke-width="3"/>
+  <g stroke="#1b232c" stroke-width="2"><line x1="68" y1="48" x2="68" y2="138"/><line x1="100" y1="48" x2="100" y2="138"/><line x1="132" y1="48" x2="132" y2="138"/><line x1="164" y1="48" x2="164" y2="138"/><line x1="196" y1="48" x2="196" y2="138"/><line x1="44" y1="72" x2="212" y2="72"/><line x1="44" y1="104" x2="212" y2="104"/></g>
+  <g fill="none" stroke-width="8" stroke-linejoin="round" stroke-linecap="round">
+    <polyline points="48,122 78,122 88,70 150,70 160,122 208,122" stroke="#ff7a6b"/>
+    <polyline points="48,132 84,132 90,84 98,104 148,104 154,132 208,132" stroke="#3fd0c9"/>
+  </g>
+  <circle cx="84" cy="196" r="22" fill="#b8c0c8"/><circle cx="84" cy="196" r="16" fill="#e63946"/><circle cx="84" cy="196" r="5" fill="#b8c0c8"/><circle cx="172" cy="196" r="22" fill="#b8c0c8"/><circle cx="172" cy="196" r="16" fill="#22252a"/><circle cx="172" cy="196" r="5" fill="#b8c0c8"/>
+  <rect x="122" y="188" width="12" height="16" rx="3" fill="#3ddc97"/>
+</svg>

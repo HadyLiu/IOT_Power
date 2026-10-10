@@ -27,6 +27,9 @@ tiny_http = "0.12.0"
 getrandom = "0.4.3"
 fastrand = "2.5.0"
 
+[build-dependencies]
+winresource = "0.1.31"
+
 [package.metadata.deb]
 name = "iot-power"
 maintainer = "IOT_Power developers"
@@ -39,7 +42,15 @@ maintainer-scripts = "../packaging/deb/"
 assets = [
     ["target/release/iot-power", "usr/bin/", "755"],
     ["../packaging/linux/iot-power.desktop", "usr/share/applications/", "644"],
-    ["../packaging/linux/iot-power.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["../packaging/icons/iot-power.svg", "usr/share/icons/hicolor/scalable/apps/iot-power.svg", "644"],
+    ["../packaging/icons/png/16x16.png", "usr/share/icons/hicolor/16x16/apps/iot-power.png", "644"],
+    ["../packaging/icons/png/24x24.png", "usr/share/icons/hicolor/24x24/apps/iot-power.png", "644"],
+    ["../packaging/icons/png/32x32.png", "usr/share/icons/hicolor/32x32/apps/iot-power.png", "644"],
+    ["../packaging/icons/png/48x48.png", "usr/share/icons/hicolor/48x48/apps/iot-power.png", "644"],
+    ["../packaging/icons/png/64x64.png", "usr/share/icons/hicolor/64x64/apps/iot-power.png", "644"],
+    ["../packaging/icons/png/128x128.png", "usr/share/icons/hicolor/128x128/apps/iot-power.png", "644"],
+    ["../packaging/icons/png/256x256.png", "usr/share/icons/hicolor/256x256/apps/iot-power.png", "644"],
+    ["../packaging/icons/png/512x512.png", "usr/share/icons/hicolor/512x512/apps/iot-power.png", "644"],
     ["../packaging/99-dc3005u.rules", "lib/udev/rules.d/", "644"],
     ["../Doc/用户手册.md", "usr/share/doc/iot-power/", "644"],
     ["../Doc/CHANGELOG.md", "usr/share/doc/iot-power/", "644"],

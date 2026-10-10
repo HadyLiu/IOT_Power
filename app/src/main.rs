@@ -111,7 +111,13 @@ fn main() -> eframe::Result {
     let mut viewport = egui::ViewportBuilder::default()
         .with_title(format!("{} v{}", i18n::window_title(), env!("CARGO_PKG_VERSION")))
         .with_inner_size(size)
-        .with_min_inner_size([640.0, 480.0]);
+        .with_min_inner_size([640.0, 480.0])
+        // Wayland 按 app_id 找同名 .desktop 取任务栏图标
+        .with_app_id("iot-power");
+    match eframe::icon_data::from_png_bytes(include_bytes!("../../packaging/icons/png/256x256.png")) {
+        Ok(icon) => viewport = viewport.with_icon(icon),
+        Err(e) => log::warn!("window icon: {e}"),
+    }
     if let Some(w) = settings.window
         && let (Some(x), Some(y)) = (w.x, w.y)
     {

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=IOT_Power
+Name[zh_CN]=IOT_Power 电源控制
+Comment=DC3005U power supply controller (portable)
+Comment[zh_CN]=DC3005U 可调电源上位机（便携版）
+# 把此文件放到解压目录，或改下面两条为绝对路径后复制到 ~/.local/share/applications/
+Exec=./iot-power
+Path=.
+Icon=icons/iot-power.svg
+StartupWMClass=iot-power
+Terminal=false
+Categories=Utility;Electronics;
