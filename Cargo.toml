@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = ["crates/dc3005u-proto", "crates/dc3005u-usb", "app"]
+
+[workspace.package]
+version = "0.2.0-dev"
+edition = "2024"
+rust-version = "1.95"
+license = "UNLICENSED"
+
+[workspace.dependencies]
+dc3005u-proto = { path = "crates/dc3005u-proto" }
+dc3005u-usb = { path = "crates/dc3005u-usb" }
+crc32fast = "1.5"
+crossbeam-channel = "0.5"
+log = "0.4"
+nusb = "0.2.7"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

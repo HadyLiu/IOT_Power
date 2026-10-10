@@ -1,0 +1,12 @@
+[package]
+name = "dc3005u-proto"
+description = "DC3005U USB protocol encoding/decoding (no IO)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+crc32fast.workspace = true
+serde.workspace = true
+thiserror.workspace = true

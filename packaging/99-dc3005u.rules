@@ -1,0 +1,2 @@
+# DC3005U 可调电源（VID 0408 / PID 1043）：授权当前登录用户访问，免 sudo
+SUBSYSTEM=="usb", ATTR{idVendor}=="0408", ATTR{idProduct}=="1043", TAG+="uaccess"

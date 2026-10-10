@@ -1,0 +1,46 @@
+[package]
+name = "iot-power"
+description = "DC3005U power supply controller (IOT_Power)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "iot-power"
+path = "src/main.rs"
+
+[dependencies]
+dc3005u-proto.workspace = true
+dc3005u-usb.workspace = true
+crossbeam-channel.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+directories = "6"
+eframe = "0.36.2"
+env_logger = "0.11"
+egui_plot = "0.37"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+rfd = "0.17.2"
+tiny_http = "0.12.0"
+getrandom = "0.4.3"
+fastrand = "2.5.0"
+
+[package.metadata.deb]
+name = "iot-power"
+maintainer = "IOT_Power developers"
+copyright = "IOT_Power developers"
+extended-description = "Desktop controller for the DC3005U programmable power supply: setpoints, live charts, recording, auxiliary functions (sweep, sequence, function generator, battery simulation) and log analysis."
+section = "electronics"
+priority = "optional"
+depends = "$auto, libudev1"
+maintainer-scripts = "../packaging/deb/"
+assets = [
+    ["target/release/iot-power", "usr/bin/", "755"],
+    ["../packaging/linux/iot-power.desktop", "usr/share/applications/", "644"],
+    ["../packaging/linux/iot-power.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["../packaging/99-dc3005u.rules", "lib/udev/rules.d/", "644"],
+    ["../Doc/用户手册.md", "usr/share/doc/iot-power/", "644"],
+    ["../Doc/CHANGELOG.md", "usr/share/doc/iot-power/", "644"],
+]

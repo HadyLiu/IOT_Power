@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=IOT_Power
+Name[zh_CN]=IOT_Power 电源控制
+Comment=DC3005U power supply controller
+Comment[zh_CN]=DC3005U 可调电源上位机
+Exec=iot-power
+Icon=iot-power
+Terminal=false
+Categories=Utility;Electronics;
