@@ -132,6 +132,7 @@ static TABLE: &[(&str, &str, &str)] = &[
     ("dev_auto_connect", "启动时自动连接", "Connect on startup"),
     ("dev_off_on_connect", "首次连接时关闭输出", "Turn output off on first connect"),
     ("dev_identity", "型号 {model}  序列号 {serial}  固件 {fw}", "Model {model}  S/N {serial}  FW {fw}"),
+    ("dev_id_line", "ID {serial}  固件 {fw}", "ID {serial}  FW {fw}"),
     ("dev_cmd_stats", "命令统计：成功 {ok} / 超时 {to} / 无效 {bad}，平均 {rtt} ms", "Commands: ok {ok} / timeout {to} / invalid {bad}, avg {rtt} ms"),
     ("gfx_language", "界面语言", "Language"),
     ("gfx_theme", "界面主题", "UI Theme"),

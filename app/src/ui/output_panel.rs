@@ -69,6 +69,11 @@ fn connection_row(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
             }
         });
     });
+    if let (true, Some(id)) = (app.connected(), &app.identity) {
+        let text = tf("dev_id_line", &[("serial", &id.serial), ("fw", &id.firmware)]);
+        ui.add(egui::Label::new(RichText::new(text).monospace().small()).truncate())
+            .on_hover_text(tf("dev_identity", &[("model", &id.model), ("serial", &id.serial), ("fw", &id.firmware)]));
+    }
 }
 
 fn output_section(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {

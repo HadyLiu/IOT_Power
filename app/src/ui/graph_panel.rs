@@ -4,15 +4,18 @@ use std::time::{Duration, Instant};
 
 use dc3005u_usb::LinkState;
 use eframe::egui::{self, Color32, RichText};
-use egui_plot::{Line, Plot};
+use egui_plot::{Line, Plot, Points};
 
 use crate::app::App;
 use crate::buffer::{self, Point, Series, Stats};
+use crate::format::{self, Scale};
 use crate::i18n::{t, tf};
 use crate::theme::Palette;
 use crate::ui::widgets::{self, hms};
 
 const LINK_GROUP: &str = "graph_x";
+/// 指针在数据两端之外超过这个距离（像素）就不显示读数
+const HOVER_PX: f64 = 40.0;
 
 struct PlotData {
     series: Series,
@@ -27,6 +30,8 @@ pub struct GraphView {
     pub hold: Option<Vec<Point>>,
     pub manual: bool,
     pub confirm_clear: bool,
+    /// 指针所指的数据点（上一帧），各图在此处画标记
+    pub hover: Option<Point>,
     /// 滑块两端拉满：显示全部
     pub full: bool,
     /// 自定义区间：距最新点的 (start_back, end_back)；None = 跟随最新 display_pts 点
@@ -45,6 +50,7 @@ impl Default for GraphView {
             hold: None,
             manual: false,
             confirm_clear: false,
+            hover: None,
             full: false,
             back: None,
             seen_total: 0,
@@ -151,6 +157,30 @@ fn stats_text(d: &PlotData) -> String {
         ),
         None => format!("{l}: --"),
     }
+}
+
+/// 指针处的一个采样点：时间、电压、电流、功率、阻值
+fn hover_readout(ui: &mut egui::Ui, p: &Point, pal: &Palette, interp: u8) {
+    let pw = p.v * p.i;
+    let (i_text, i_unit) = format::current(p.i, format::auto_scale(Scale::Unit, p.i.abs()), interp);
+    let (p_text, p_unit) = format::power(pw, format::auto_scale(Scale::Unit, pw.abs()), interp);
+    let (r_text, r_unit) = format::resistance(p.v, p.i, interp);
+    let rows = [
+        (Series::Voltage, format!("{:.*}", 3 + usize::from(interp), p.v), "V".to_string()),
+        (Series::Current, i_text, i_unit),
+        (Series::Power, p_text, p_unit),
+        (Series::Resistance, r_text, r_unit),
+    ];
+    ui.label(RichText::new(format!("{}  {:.3}", t("graph_time"), p.t)).weak());
+    egui::Grid::new("graph_hover").num_columns(3).spacing([12.0, 2.0]).show(ui, |ui| {
+        for (s, value, unit) in rows {
+            let c = series_color(s, pal);
+            ui.label(RichText::new(t(s.key())).color(c));
+            ui.label(RichText::new(value).monospace().color(c));
+            ui.label(unit);
+            ui.end_row();
+        }
+    });
 }
 
 fn toolbar(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
@@ -322,6 +352,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
     let bottom_h = 2.0 * row_h + 18.0 + 3.0 * ui.spacing().item_spacing.y;
     let n_plots = app.graph.cache.len();
     if n_plots == 0 || (hi == lo && !held) {
+        app.graph.hover = None;
         let h = (ui.available_height() - bottom_h).max(40.0);
         ui.allocate_ui(egui::vec2(ui.available_width(), h), |ui| {
             ui.centered_and_justified(|ui| {
@@ -332,7 +363,14 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
         let n = n_plots as f32;
         let plot_h = ((ui.available_height() - bottom_h - n * row_h) / n - ui.spacing().item_spacing.y).max(60.0);
         let manual = app.graph.manual;
-        for (k, d) in app.graph.cache.iter().enumerate() {
+        let interp = app.settings.interp;
+        let (g, buf) = (&app.graph, &app.buffer);
+        let lookup = |x: f64| match &g.hold {
+            Some(h) => buffer::nearest(h.len(), |k| h[k], x),
+            None => buffer::nearest(hi - lo, |k| *buf.get(lo + k).expect("window in buffer"), x),
+        };
+        let mut hover = None;
+        for (k, d) in g.cache.iter().enumerate() {
             let name = t(d.series.key());
             let c = series_color(d.series, pal);
             ui.label(RichText::new(format!("{name} ({})", d.unit)).color(c).strong());
@@ -347,15 +385,33 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
                 .allow_boxed_zoom(manual)
                 .allow_double_click_reset(manual);
             plot = if k + 1 == n_plots { plot.x_axis_label(t("graph_time")) } else { plot.show_axes([false, true]) };
-            plot.show(ui, |pui| {
+            let resp = plot.show(ui, |pui| {
                 if !manual {
                     pui.set_auto_bounds([true, true]);
                 }
                 for seg in &d.segs {
                     pui.line(Line::new(name, seg.clone()).color(c).width(1.5));
                 }
+                if let Some(p) = g.hover
+                    && let y = d.series.value(&p)
+                    && y.is_finite()
+                {
+                    pui.add(Points::new("", vec![[p.t, y * d.scale]]).radius(4.0).color(c).filled(true));
+                }
+                pui.pointer_coordinate().map(|pos| (pos.x, pui.transform().dpos_dvalue_x().abs()))
             });
+            if let Some((x, px_per_s)) = resp.inner
+                && resp.response.hovered()
+                && let (Some(first), Some(last)) = (lookup(f64::NEG_INFINITY), lookup(f64::INFINITY))
+                && x > first.t - HOVER_PX / px_per_s
+                && x < last.t + HOVER_PX / px_per_s
+                && let Some(p) = lookup(x)
+            {
+                hover = Some(p);
+                resp.response.on_hover_ui_at_pointer(|ui| hover_readout(ui, &p, pal, interp));
+            }
         }
+        app.graph.hover = hover;
     }
 
     // 缓冲占用 + 区间滑块

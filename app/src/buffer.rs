@@ -197,6 +197,28 @@ pub fn segments<'a>(
     segs
 }
 
+/// `n` 个按时间递增的点里，时间最接近 `t` 的一个
+pub fn nearest(n: usize, get: impl Fn(usize) -> Point, t: f64) -> Option<Point> {
+    if n == 0 {
+        return None;
+    }
+    let (mut lo, mut hi) = (0, n);
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        if get(mid).t < t {
+            lo = mid + 1;
+        } else {
+            hi = mid;
+        }
+    }
+    let after = get(lo.min(n - 1));
+    if lo == 0 {
+        return Some(after);
+    }
+    let before = get(lo - 1);
+    Some(if lo < n && after.t - t < t - before.t { after } else { before })
+}
+
 pub struct SampleBuffer {
     points: VecDeque<Point>,
     cap: usize,
@@ -255,6 +277,10 @@ impl SampleBuffer {
         self.points.len() as f64 / self.cap as f64
     }
 
+    pub fn get(&self, k: usize) -> Option<&Point> {
+        self.points.get(k)
+    }
+
     /// 下标 `lo..hi`（0 = 最旧）
     pub fn range(&self, lo: usize, hi: usize) -> impl Iterator<Item = &Point> + Clone {
         let hi = hi.min(self.points.len());
@@ -309,6 +335,19 @@ mod tests {
         let n: usize = segs.iter().map(Vec::len).sum();
         assert!(n <= 220, "{n}");
         assert!(segs[0].iter().any(|q| q[1] == 9.0));
+    }
+
+    #[test]
+    fn nearest_by_time() {
+        let pts: Vec<Point> = [0.0, 1.0, 2.0, 4.0].map(|t| Point { t, v: t, i: 0.0, gap: false }).into();
+        let at = |t| nearest(pts.len(), |k| pts[k], t).map(|p| p.t);
+        assert_eq!(at(-5.0), Some(0.0));
+        assert_eq!(at(0.4), Some(0.0));
+        assert_eq!(at(0.6), Some(1.0));
+        assert_eq!(at(2.9), Some(2.0));
+        assert_eq!(at(3.1), Some(4.0));
+        assert_eq!(at(99.0), Some(4.0));
+        assert_eq!(nearest(0, |k| pts[k], 1.0), None);
     }
 
     #[test]

@@ -1533,6 +1533,40 @@ mod smoke {
     }
 
     #[test]
+    fn chart_hover_reads_point_and_id_shown() {
+        let (mut app, sim, ctx) = rig();
+        connect(&mut app, &ctx);
+        sim.state().output_on = true;
+        until(&mut app, &ctx, "samples with current", |a| {
+            a.buffer.latest(None).iter().filter(|p| p.i > 0.0).count() >= 20
+        });
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0));
+        let run = |app: &mut App, events: Vec<egui::Event>| {
+            let mut out =
+                ctx.run_ui(egui::RawInput { screen_rect: Some(screen), events, ..Default::default() }, |ui| {
+                    app.handle_events(ui.ctx());
+                    crate::ui::draw(app, ui);
+                });
+            out.textures_delta.clear();
+        };
+        app.graph.hold = Some(app.buffer.latest(None));
+        run(&mut app, vec![]);
+        let target = egui::pos2(1280.0 * 0.75, 800.0 * 0.3);
+        for _ in 0..3 {
+            run(&mut app, vec![egui::Event::PointerMoved(target)]);
+        }
+        let p = app.graph.hover.expect("hovered point");
+        let held = app.graph.hold.as_ref().expect("held");
+        assert!(held.contains(&p));
+        assert!(p.i > 0.0);
+        app.graph.hold = None;
+
+        let id = app.identity.as_ref().expect("identity");
+        assert_eq!(id.serial, "8B63A8F401E4");
+        assert!(tf("dev_id_line", &[("serial", &id.serial), ("fw", &id.firmware)]).contains("8B63A8F401E4"));
+    }
+
+    #[test]
     fn sequence_runs_merges_and_estop_stops_it() {
         use crate::auxfn::SeqJob;
         use crate::auxfn::sequence::Step;
