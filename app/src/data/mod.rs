@@ -86,11 +86,21 @@ impl Default for Snapshot {
 pub type SharedSnapshot = Arc<RwLock<Snapshot>>;
 
 /// E += P_i × (t_i − t_{i−1})；跨过断线时段的那一段不累加、不计入平均功率的分母。
-#[derive(Debug, Default)]
+/// 平均功率只统计本次输出开启以来的时段：输出关闭时为 0，重新打开后从头算。
+#[derive(Debug)]
 pub struct Energy {
     last_t: Option<Instant>,
     energy_j: f64,
-    active_s: f64,
+    output_on: bool,
+    on_energy_j: f64,
+    on_s: f64,
+}
+
+impl Default for Energy {
+    fn default() -> Self {
+        // 输出状态未知时按「可能为开」统计
+        Self { last_t: None, energy_j: 0.0, output_on: true, on_energy_j: 0.0, on_s: 0.0 }
+    }
 }
 
 impl Energy {
@@ -98,7 +108,10 @@ impl Energy {
         if let Some(lt) = self.last_t {
             let dt = t.saturating_duration_since(lt).as_secs_f64();
             self.energy_j += p_w * dt;
-            self.active_s += dt;
+            if self.output_on {
+                self.on_energy_j += p_w * dt;
+                self.on_s += dt;
+            }
         }
         self.last_t = Some(t);
     }
@@ -107,13 +120,23 @@ impl Energy {
         self.last_t = None;
     }
 
+    pub fn set_output(&mut self, on: bool) {
+        if on != self.output_on {
+            self.output_on = on;
+            self.on_energy_j = 0.0;
+            self.on_s = 0.0;
+        }
+    }
+
     pub fn zero(&mut self) {
         self.energy_j = 0.0;
-        self.active_s = 0.0;
+        self.on_energy_j = 0.0;
+        self.on_s = 0.0;
     }
 
     pub fn reset(&mut self) {
-        *self = Self::default();
+        let on = self.output_on;
+        *self = Self { output_on: on, ..Self::default() };
     }
 
     pub fn energy_j(&self) -> f64 {
@@ -121,7 +144,10 @@ impl Energy {
     }
 
     pub fn avg_power_w(&self) -> Option<f64> {
-        (self.active_s > 0.0).then(|| self.energy_j / self.active_s)
+        if !self.output_on {
+            return Some(0.0);
+        }
+        (self.on_s > 0.0).then(|| self.on_energy_j / self.on_s)
     }
 }
 
@@ -295,7 +321,13 @@ impl DataThread {
                     r.event(Instant::now(), kind, &fields);
                 }
             }
-            DataCmd::LogCtx(c) => self.ctx = c,
+            DataCmd::LogCtx(c) => {
+                // `0` / `0?` 为关；已应答开、未经确认的开、未知都按「可能为开」
+                let on = !matches!(c.out.as_str(), "0" | "0?");
+                self.energy.set_output(on);
+                self.cum.set_output(on);
+                self.ctx = c;
+            }
             DataCmd::Tap(tx) => self.taps.push(tx),
             DataCmd::Flush(done) => {
                 if let Some(r) = &mut self.recorder {
@@ -403,6 +435,31 @@ mod tests {
         e.zero();
         assert_eq!(e.energy_j(), 0.0);
         assert!(e.avg_power_w().is_none());
+    }
+
+    #[test]
+    fn avg_power_only_counts_current_on_period() {
+        let t0 = Instant::now();
+        let s = |n: u64| t0 + Duration::from_secs(n);
+        let mut e = Energy::default();
+        e.push(s(0), 4.0);
+        e.push(s(2), 4.0);
+        assert!((e.avg_power_w().unwrap() - 4.0).abs() < 1e-9);
+        // 关输出：平均功率归零且不再随时间变化，能量照常累计
+        e.set_output(false);
+        e.push(s(3), 0.0);
+        e.push(s(100), 0.0);
+        assert_eq!(e.avg_power_w(), Some(0.0));
+        assert!((e.energy_j() - 8.0).abs() < 1e-9);
+        // 重新打开：从开输出时刻重新平均
+        e.set_output(true);
+        assert!(e.avg_power_w().is_none());
+        e.push(s(101), 1.0);
+        e.push(s(102), 1.0);
+        assert!((e.avg_power_w().unwrap() - 1.0).abs() < 1e-9);
+        // 重复的同一状态不清零
+        e.set_output(true);
+        assert!((e.avg_power_w().unwrap() - 1.0).abs() < 1e-9);
     }
 
     #[test]

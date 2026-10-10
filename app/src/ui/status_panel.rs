@@ -57,6 +57,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
         None => (dash.into(), "W".into()),
     };
     let pick = |x: String| if have { x } else { dash.to_string() };
+    let held = if app.graph.hold.is_some() { format!(" · {}", t("btn_hold")) } else { String::new() };
 
     ui.add_space(4.0);
     let (p_text, i_text, r_text) = (pick(p_text), pick(i_text), pick(r_text));
@@ -65,7 +66,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
         [
             (format!("{} (V)", t("lcd_voltage")), &v_text, pal.lcd_voltage),
             (format!("{} ({p_unit})", t("lcd_power")), &p_text, pal.lcd_power),
-            (format!("{} ({a_unit})", t("lcd_avg_power")), &a_text, pal.lcd_avg_power),
+            (format!("{} ({a_unit}){held}", t("lcd_avg_power")), &a_text, pal.lcd_avg_power),
         ],
     );
     ui.add_space(2.0);
@@ -73,7 +74,7 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
         ui,
         [
             (format!("{} ({i_unit})", t("lcd_current")), &i_text, pal.lcd_current),
-            (t("lcd_energy").to_string(), &e_text, pal.lcd_energy),
+            (format!("{}{held}", t("lcd_energy")), &e_text, pal.lcd_energy),
             (format!("{} ({r_unit})", t("lcd_load_r")), &r_text, pal.lcd_resistance),
         ],
     );

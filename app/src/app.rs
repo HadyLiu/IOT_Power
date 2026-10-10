@@ -87,12 +87,15 @@ impl Default for StatusDisplay {
 }
 
 impl StatusDisplay {
-    fn push(&mut self, p: &Processed) {
+    /// `hold`：曲线「保持」中，能量与平均功率显示冻结（后台照常累计）
+    fn push(&mut self, p: &Processed, hold: bool) {
         self.acc_v += p.v;
         self.acc_i += p.i_a;
         self.acc_n += 1;
-        self.energy_j = p.energy_j;
-        self.avg_power_w = p.avg_power_w;
+        if !hold {
+            self.energy_j = p.energy_j;
+            self.avg_power_w = p.avg_power_w;
+        }
     }
 
     fn flush(&mut self, period: Duration) {
@@ -899,7 +902,7 @@ impl App {
 
         let mut latest_echo = None;
         while let Ok(p) = self.data.samples.try_recv() {
-            self.status.push(&p);
+            self.status.push(&p, self.graph.hold.is_some());
             self.buffer.push(p.sample.t, p.v, p.i_a);
             self.sample_times.push_back(p.sample.t);
             while self.sample_times.len() > RATE_WINDOW + 1 {
@@ -1423,6 +1426,31 @@ mod smoke {
         sim.plug();
         until(&mut app, &ctx, "gap after reconnect", |a| a.buffer.latest(None).iter().any(|p| p.gap));
         frame(&mut app, &ctx);
+    }
+
+    #[test]
+    fn avg_power_zero_when_off_and_frozen_while_held() {
+        let (mut app, _sim, ctx) = rig();
+        connect(&mut app, &ctx);
+        until(&mut app, &ctx, "avg 0 while off", |a| a.status.avg_power_w == Some(0.0));
+
+        app.click_output();
+        until(&mut app, &ctx, "avg > 0 while on", |a| a.status.avg_power_w.is_some_and(|p| p > 0.0));
+        until(&mut app, &ctx, "energy grows", |a| a.status.energy_j > 0.0);
+
+        app.graph.hold = Some(app.buffer.latest(None));
+        frame(&mut app, &ctx);
+        let (e, avg) = (app.status.energy_j, app.status.avg_power_w);
+        let n = app.buffer.latest(None).len();
+        until(&mut app, &ctx, "samples keep coming while held", |a| a.buffer.latest(None).len() > n + 5);
+        assert_eq!((app.status.energy_j, app.status.avg_power_w), (e, avg));
+
+        app.graph.hold = None;
+        until(&mut app, &ctx, "energy resumes after release", |a| a.status.energy_j > e);
+
+        app.click_output();
+        until(&mut app, &ctx, "output off", |a| a.out.view == OutputView::Acked(false));
+        until(&mut app, &ctx, "avg back to 0", |a| a.status.avg_power_w == Some(0.0));
     }
 
     #[test]
