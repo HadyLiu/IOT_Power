@@ -1204,6 +1204,13 @@ impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.handle_events(ctx);
         self.hotkeys(ctx);
+        if std::env::var_os("IOT_DBG_PANEL").is_some() {
+            if matches!(self.link, LinkState::Disconnected) && self.sim.is_some() {
+                self.connect();
+            }
+            let w = egui::containers::panel::PanelState::load(ctx, egui::Id::new("left")).map(|s| s.size().x);
+            log::warn!("DBG left={w:?} screen={:?}", ctx.content_rect().width());
+        }
 
         let dropped: Vec<PathBuf> = ctx.input(|i| {
             i.raw
@@ -1473,6 +1480,34 @@ mod smoke {
         app.saved_files = None;
         app.last_error = Some("x".into());
         frame(&mut app, &ctx);
+    }
+
+    #[test]
+    fn left_panel_width_is_stable() {
+        let (mut app, _sim, ctx) = rig();
+        connect(&mut app, &ctx);
+        let input = || egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 800.0))),
+            ..Default::default()
+        };
+        let width = |ctx: &egui::Context| {
+            egui::containers::panel::PanelState::load(ctx, egui::Id::new("left")).map(|s| s.size().x)
+        };
+        for page in 0..6 {
+            app.aux_ui.page = page;
+            let mut widths = Vec::new();
+            for _ in 0..30 {
+                let mut out = ctx.run_ui(input(), |ui| {
+                    app.handle_events(ui.ctx());
+                    crate::ui::draw(&mut app, ui);
+                });
+                out.textures_delta.clear();
+                widths.push(width(&ctx).expect("left panel state"));
+            }
+            let (first, last) = (widths[2], widths[29]);
+            assert!((last - first).abs() < 1.0, "page {page}: left panel grew {first} -> {last}");
+            assert!(last <= 1280.0 * 0.45 + 1.0, "page {page}: left panel too wide {last}");
+        }
     }
 
     #[test]

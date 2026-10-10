@@ -24,7 +24,9 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui) {
         banners(app, ui, &pal);
     });
     egui::Panel::bottom("statusbar").show(ui, |ui| status_bar(app, ui, &pal));
-    egui::Panel::left("left").default_size(330.0).min_size(300.0).show(ui, |ui| {
+    // 限宽兜底：左栏内容若意外超宽，也不会把曲线区挤没
+    let max_left = (ui.available_width() * 0.45).max(320.0);
+    egui::Panel::left("left").default_size(330.0).min_size(300.0).max_size(max_left).show(ui, |ui| {
         output_panel::draw(app, ui, &pal);
     });
     egui::CentralPanel::default().show(ui, |ui| graph_panel::draw(app, ui, &pal));

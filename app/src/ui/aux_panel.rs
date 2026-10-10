@@ -240,10 +240,13 @@ pub fn draw(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
             if kind.is_some() && kind == running {
                 title = RichText::new(format!("● {}", t(key))).strong().color(pal.green);
             }
-            ui.add_sized([ui.available_width() - 28.0, 20.0], egui::Label::new(title));
-            if ui.small_button("▶").clicked() {
-                app.aux_ui.page = (app.aux_ui.page + 1) % PAGES.len();
-            }
+            // 宽度交给布局分配：手算宽度一旦超出，左栏会每帧变宽
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.small_button("▶").clicked() {
+                    app.aux_ui.page = (app.aux_ui.page + 1) % PAGES.len();
+                }
+                ui.centered_and_justified(|ui| ui.label(title));
+            });
         })
         .response;
     // 滚轮切换：只在连接后、鼠标在标题行上时
@@ -356,7 +359,7 @@ fn preset_page(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
     ui.add_enabled_ui(enabled, |ui| {
         egui::ComboBox::from_id_salt("preset_select")
             .selected_text(format!("[>] {}", t("preset_select")))
-            .width(ui.available_width() - 8.0)
+            .width((ui.available_width() - 24.0).max(80.0))
             .show_ui(ui, |ui| {
                 for k in 1..=9 {
                     let Some(&[v, i]) = app.settings.presets.get(&k.to_string()) else { continue };
