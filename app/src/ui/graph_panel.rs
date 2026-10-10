@@ -274,9 +274,6 @@ fn toolbar(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {
         {
             app.float.open = !float_on;
         }
-        if ui.add_enabled(normal, egui::Button::new(t("btn_zero"))).on_hover_text(t("zero_tip")).clicked() {
-            app.zero_energy();
-        }
         if ui.button(t("ana_open")).clicked() {
             app.open_analysis_dialog();
         }
@@ -312,11 +309,17 @@ fn clear_modal(app: &mut App, ui: &egui::Ui) {
     if let Some(ok) = action {
         app.graph.confirm_clear = false;
         if ok {
-            app.buffer.clear();
-            app.graph.hold = None;
-            app.graph.reset_window();
+            clear_all(app);
         }
     }
+}
+
+/// 「清空」：曲线缓冲 + 状态区的能量、电量、平均功率、平均电流
+pub(crate) fn clear_all(app: &mut App) {
+    app.buffer.clear();
+    app.graph.hold = None;
+    app.graph.reset_window();
+    app.zero_energy();
 }
 
 pub fn draw(app: &mut App, ui: &mut egui::Ui, pal: &Palette) {

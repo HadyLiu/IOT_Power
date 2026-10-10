@@ -97,6 +97,21 @@ pub fn resistance(v: f64, i_a: f64, interp: u8) -> (String, String) {
     }
 }
 
+/// 能量：≥ 1000 J 显示 kJ
+pub fn energy(j: f64) -> (String, String) {
+    if j.abs() >= 1e3 { (format!("{:.3}", j / 1e3), "kJ".into()) } else { (format!("{j:.3}"), "J".into()) }
+}
+
+/// 电量：≥ 1000 mAh 显示 Ah
+pub fn charge(mah: f64, interp: u8) -> (String, String) {
+    let d = 3 + usize::from(interp);
+    if mah.abs() >= 1e3 {
+        (format!("{:.*}", d, mah / 1e3), "Ah".into())
+    } else {
+        (format!("{:.*}", d, mah), "mAh".into())
+    }
+}
+
 /// 设定值统一 3 位小数
 pub fn milli3(x: f64) -> String {
     format!("{x:.3}")
@@ -122,6 +137,16 @@ mod tests {
         // 10 nA 在 µA 量程显示为 0.01
         assert_eq!(current(1e-8, Scale::Micro, 0), ("0.01".into(), "µA".into()));
         assert_eq!(current(0.012345, Scale::Milli, 3), ("12.34500".into(), "mA".into()));
+    }
+
+    #[test]
+    fn energy_and_charge_units() {
+        assert_eq!(energy(999.9994), ("999.999".into(), "J".into()));
+        assert_eq!(energy(1000.0), ("1.000".into(), "kJ".into()));
+        assert_eq!(energy(123_456.0), ("123.456".into(), "kJ".into()));
+        assert_eq!(charge(999.5, 0), ("999.500".into(), "mAh".into()));
+        assert_eq!(charge(1000.0, 0), ("1.000".into(), "Ah".into()));
+        assert_eq!(charge(2500.0, 1), ("2.5000".into(), "Ah".into()));
     }
 
     #[test]

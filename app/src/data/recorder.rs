@@ -317,6 +317,8 @@ mod tests {
             i_a: i,
             energy_j: 0.0,
             avg_power_w: None,
+            charge_c: 0.0,
+            avg_current_a: None,
             cum_energy_j: 0.0,
         }
     }

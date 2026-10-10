@@ -61,10 +61,13 @@ pub struct StatusDisplay {
     pub i_a: f64,
     pub energy_j: f64,
     pub avg_power_w: Option<f64>,
+    pub charge_c: f64,
+    pub avg_current_a: Option<f64>,
     pub have: bool,
     pub i_scale: Scale,
     pub p_scale: Scale,
     pub avgp_scale: Scale,
+    pub avgi_scale: Scale,
 }
 
 impl Default for StatusDisplay {
@@ -78,16 +81,19 @@ impl Default for StatusDisplay {
             i_a: 0.0,
             energy_j: 0.0,
             avg_power_w: None,
+            charge_c: 0.0,
+            avg_current_a: None,
             have: false,
             i_scale: Scale::Milli,
             p_scale: Scale::Unit,
             avgp_scale: Scale::Unit,
+            avgi_scale: Scale::Milli,
         }
     }
 }
 
 impl StatusDisplay {
-    /// `hold`：曲线「保持」中，能量与平均功率显示冻结（后台照常累计）
+    /// `hold`：曲线「保持」中，能量、电量与平均值显示冻结（后台照常累计）
     fn push(&mut self, p: &Processed, hold: bool) {
         self.acc_v += p.v;
         self.acc_i += p.i_a;
@@ -95,7 +101,13 @@ impl StatusDisplay {
         if !hold {
             self.energy_j = p.energy_j;
             self.avg_power_w = p.avg_power_w;
+            self.charge_c = p.charge_c;
+            self.avg_current_a = p.avg_current_a;
         }
+    }
+
+    pub fn charge_mah(&self) -> f64 {
+        self.charge_c / 3.6
     }
 
     fn flush(&mut self, period: Duration) {
@@ -408,6 +420,8 @@ impl App {
         self.data.send(DataCmd::Zero);
         self.status.energy_j = 0.0;
         self.status.avg_power_w = None;
+        self.status.charge_c = 0.0;
+        self.status.avg_current_a = None;
     }
 
     /// 急停：停 AUX → 清空待发 → 关输出（IO 线程最多重试 5 次）
@@ -1432,25 +1446,43 @@ mod smoke {
     fn avg_power_zero_when_off_and_frozen_while_held() {
         let (mut app, _sim, ctx) = rig();
         connect(&mut app, &ctx);
-        until(&mut app, &ctx, "avg 0 while off", |a| a.status.avg_power_w == Some(0.0));
+        until(&mut app, &ctx, "avg 0 while off", |a| {
+            a.status.avg_power_w == Some(0.0) && a.status.avg_current_a == Some(0.0)
+        });
 
         app.click_output();
-        until(&mut app, &ctx, "avg > 0 while on", |a| a.status.avg_power_w.is_some_and(|p| p > 0.0));
-        until(&mut app, &ctx, "energy grows", |a| a.status.energy_j > 0.0);
+        until(&mut app, &ctx, "avg > 0 while on", |a| {
+            a.status.avg_power_w.is_some_and(|p| p > 0.0) && a.status.avg_current_a.is_some_and(|i| i > 0.0)
+        });
+        until(&mut app, &ctx, "energy and charge grow", |a| a.status.energy_j > 0.0 && a.status.charge_c > 0.0);
 
         app.graph.hold = Some(app.buffer.latest(None));
         frame(&mut app, &ctx);
-        let (e, avg) = (app.status.energy_j, app.status.avg_power_w);
+        let frozen = |s: &StatusDisplay| (s.energy_j, s.avg_power_w, s.charge_c, s.avg_current_a);
+        let before = frozen(&app.status);
         let n = app.buffer.latest(None).len();
         until(&mut app, &ctx, "samples keep coming while held", |a| a.buffer.latest(None).len() > n + 5);
-        assert_eq!((app.status.energy_j, app.status.avg_power_w), (e, avg));
+        assert_eq!(frozen(&app.status), before);
 
         app.graph.hold = None;
-        until(&mut app, &ctx, "energy resumes after release", |a| a.status.energy_j > e);
+        until(&mut app, &ctx, "energy resumes after release", |a| {
+            a.status.energy_j > before.0 && a.status.charge_c > before.2
+        });
 
         app.click_output();
         until(&mut app, &ctx, "output off", |a| a.out.view == OutputView::Acked(false));
-        until(&mut app, &ctx, "avg back to 0", |a| a.status.avg_power_w == Some(0.0));
+        until(&mut app, &ctx, "avg back to 0", |a| {
+            a.status.avg_power_w == Some(0.0) && a.status.avg_current_a == Some(0.0)
+        });
+
+        // 「清空」同时清零能量、电量和平均值，数据线程随后发来的值也从 0 起算
+        crate::ui::graph_panel::clear_all(&mut app);
+        assert!(app.buffer.is_empty());
+        assert_eq!((app.status.energy_j, app.status.charge_c), (0.0, 0.0));
+        assert_eq!((app.status.avg_power_w, app.status.avg_current_a), (None, None));
+        let e_before = before.0;
+        until(&mut app, &ctx, "samples after clear", |a| a.buffer.len() > 3);
+        assert!(app.status.energy_j < e_before);
     }
 
     #[test]

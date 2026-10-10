@@ -64,6 +64,9 @@ pub struct Processed {
     /// 显示能量（回零清零）
     pub energy_j: f64,
     pub avg_power_w: Option<f64>,
+    /// 显示电量（库仑，回零清零）
+    pub charge_c: f64,
+    pub avg_current_a: Option<f64>,
     /// 连接以来的累计能量，不受回零影响（电池模拟用）
     pub cum_energy_j: f64,
 }
@@ -85,31 +88,43 @@ impl Default for Snapshot {
 
 pub type SharedSnapshot = Arc<RwLock<Snapshot>>;
 
-/// E += P_i × (t_i − t_{i−1})；跨过断线时段的那一段不累加、不计入平均功率的分母。
-/// 平均功率只统计本次输出开启以来的时段：输出关闭时为 0，重新打开后从头算。
+/// E += P_i × (t_i − t_{i−1})，Q += I_i × (t_i − t_{i−1})；跨过断线时段的那一段不累加、不计入平均值的分母。
+/// 平均功率 / 平均电流只统计本次输出开启以来的时段：输出关闭时为 0，重新打开后从头算。
 #[derive(Debug)]
 pub struct Energy {
     last_t: Option<Instant>,
     energy_j: f64,
+    charge_c: f64,
     output_on: bool,
     on_energy_j: f64,
+    on_charge_c: f64,
     on_s: f64,
 }
 
 impl Default for Energy {
     fn default() -> Self {
         // 输出状态未知时按「可能为开」统计
-        Self { last_t: None, energy_j: 0.0, output_on: true, on_energy_j: 0.0, on_s: 0.0 }
+        Self {
+            last_t: None,
+            energy_j: 0.0,
+            charge_c: 0.0,
+            output_on: true,
+            on_energy_j: 0.0,
+            on_charge_c: 0.0,
+            on_s: 0.0,
+        }
     }
 }
 
 impl Energy {
-    pub fn push(&mut self, t: Instant, p_w: f64) {
+    pub fn push(&mut self, t: Instant, p_w: f64, i_a: f64) {
         if let Some(lt) = self.last_t {
             let dt = t.saturating_duration_since(lt).as_secs_f64();
             self.energy_j += p_w * dt;
+            self.charge_c += i_a * dt;
             if self.output_on {
                 self.on_energy_j += p_w * dt;
+                self.on_charge_c += i_a * dt;
                 self.on_s += dt;
             }
         }
@@ -123,15 +138,20 @@ impl Energy {
     pub fn set_output(&mut self, on: bool) {
         if on != self.output_on {
             self.output_on = on;
-            self.on_energy_j = 0.0;
-            self.on_s = 0.0;
+            self.clear_on();
         }
+    }
+
+    fn clear_on(&mut self) {
+        self.on_energy_j = 0.0;
+        self.on_charge_c = 0.0;
+        self.on_s = 0.0;
     }
 
     pub fn zero(&mut self) {
         self.energy_j = 0.0;
-        self.on_energy_j = 0.0;
-        self.on_s = 0.0;
+        self.charge_c = 0.0;
+        self.clear_on();
     }
 
     pub fn reset(&mut self) {
@@ -143,11 +163,23 @@ impl Energy {
         self.energy_j
     }
 
-    pub fn avg_power_w(&self) -> Option<f64> {
+    pub fn charge_c(&self) -> f64 {
+        self.charge_c
+    }
+
+    fn on_avg(&self, x: f64) -> Option<f64> {
         if !self.output_on {
             return Some(0.0);
         }
-        (self.on_s > 0.0).then(|| self.on_energy_j / self.on_s)
+        (self.on_s > 0.0).then(|| x / self.on_s)
+    }
+
+    pub fn avg_power_w(&self) -> Option<f64> {
+        self.on_avg(self.on_energy_j)
+    }
+
+    pub fn avg_current_a(&self) -> Option<f64> {
+        self.on_avg(self.on_charge_c)
     }
 }
 
@@ -236,14 +268,16 @@ impl DataThread {
 
     fn on_sample(&mut self, s: Sample) -> Processed {
         let (v, i_a, p_w) = process(&self.cfg, &s);
-        self.energy.push(s.t, p_w);
-        self.cum.push(s.t, p_w);
+        self.energy.push(s.t, p_w, i_a);
+        self.cum.push(s.t, p_w, i_a);
         let p = Processed {
             sample: s,
             v,
             i_a,
             energy_j: self.energy.energy_j(),
             avg_power_w: self.energy.avg_power_w(),
+            charge_c: self.energy.charge_c(),
+            avg_current_a: self.energy.avg_current_a(),
             cum_energy_j: self.cum.energy_j(),
         };
         if let Some(r) = &mut self.recorder {
@@ -425,16 +459,28 @@ mod tests {
     fn tc84_energy_skips_link_gap() {
         let t0 = Instant::now();
         let mut e = Energy::default();
-        e.push(t0, 2.0);
-        e.push(t0 + Duration::from_secs(1), 2.0);
+        e.push(t0, 2.0, 0.5);
+        e.push(t0 + Duration::from_secs(1), 2.0, 0.5);
         e.link_lost();
-        e.push(t0 + Duration::from_secs(11), 2.0);
-        e.push(t0 + Duration::from_secs(12), 2.0);
+        e.push(t0 + Duration::from_secs(11), 2.0, 0.5);
+        e.push(t0 + Duration::from_secs(12), 2.0, 0.5);
         assert!((e.energy_j() - 4.0).abs() < 1e-9);
         assert!((e.avg_power_w().unwrap() - 2.0).abs() < 1e-9);
+        assert!((e.charge_c() - 1.0).abs() < 1e-9);
+        assert!((e.avg_current_a().unwrap() - 0.5).abs() < 1e-9);
         e.zero();
-        assert_eq!(e.energy_j(), 0.0);
+        assert_eq!((e.energy_j(), e.charge_c()), (0.0, 0.0));
         assert!(e.avg_power_w().is_none());
+        assert!(e.avg_current_a().is_none());
+    }
+
+    #[test]
+    fn charge_one_mah_per_hour_at_one_ma() {
+        let t0 = Instant::now();
+        let mut e = Energy::default();
+        e.push(t0, 5e-3, 1e-3);
+        e.push(t0 + Duration::from_secs(3600), 5e-3, 1e-3);
+        assert!((e.charge_c() / 3.6 - 1.0).abs() < 1e-9);
     }
 
     #[test]
@@ -442,21 +488,25 @@ mod tests {
         let t0 = Instant::now();
         let s = |n: u64| t0 + Duration::from_secs(n);
         let mut e = Energy::default();
-        e.push(s(0), 4.0);
-        e.push(s(2), 4.0);
+        e.push(s(0), 4.0, 0.4);
+        e.push(s(2), 4.0, 0.4);
         assert!((e.avg_power_w().unwrap() - 4.0).abs() < 1e-9);
-        // 关输出：平均功率归零且不再随时间变化，能量照常累计
+        assert!((e.avg_current_a().unwrap() - 0.4).abs() < 1e-9);
+        // 关输出：平均功率 / 平均电流归零且不再随时间变化，能量和电量照常累计
         e.set_output(false);
-        e.push(s(3), 0.0);
-        e.push(s(100), 0.0);
+        e.push(s(3), 0.0, 0.0);
+        e.push(s(100), 0.0, 0.0);
         assert_eq!(e.avg_power_w(), Some(0.0));
+        assert_eq!(e.avg_current_a(), Some(0.0));
         assert!((e.energy_j() - 8.0).abs() < 1e-9);
+        assert!((e.charge_c() - 0.8).abs() < 1e-9);
         // 重新打开：从开输出时刻重新平均
         e.set_output(true);
         assert!(e.avg_power_w().is_none());
-        e.push(s(101), 1.0);
-        e.push(s(102), 1.0);
+        e.push(s(101), 1.0, 0.1);
+        e.push(s(102), 1.0, 0.1);
         assert!((e.avg_power_w().unwrap() - 1.0).abs() < 1e-9);
+        assert!((e.avg_current_a().unwrap() - 0.1).abs() < 1e-9);
         // 重复的同一状态不清零
         e.set_output(true);
         assert!((e.avg_power_w().unwrap() - 1.0).abs() < 1e-9);
@@ -467,7 +517,7 @@ mod tests {
         let t0 = Instant::now();
         let mut e = Energy::default();
         for k in 0..=72_000u64 {
-            e.push(t0 + Duration::from_millis(50 * k), 5e-6);
+            e.push(t0 + Duration::from_millis(50 * k), 5e-6, 1e-6);
         }
         assert!((e.energy_j() - 5e-6 * 3600.0).abs() < 1e-12);
     }
