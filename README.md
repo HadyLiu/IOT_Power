@@ -89,6 +89,8 @@ bash scripts/docker-build.sh check  # fmt + clippy + test 等
 2. **检查**：在镜像内跑 `packaging/docker/check.sh`（fmt、clippy、test、Windows 交叉编译检查）。push 到 `main` 和 PR 都会执行。
 3. **构建发布**：仅推送 `v*` tag 时执行，跑 `packaging/docker/compile.sh`，产物（Linux `tar.gz`/`deb`、Windows `zip`、`SHA256SUMS`）上传为 Artifact 并发布到 GitHub Release。
 
+同一提交同时推 `main` 和 `v*` tag 时，`main` 那次运行会自动跳过，只由 tag 那次运行完整流程（发版请一次推送：`git push origin main v0.3.0`）。
+
 发版示例：
 
 ```bash

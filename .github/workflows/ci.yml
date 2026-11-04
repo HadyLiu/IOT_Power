@@ -24,8 +24,30 @@ env:
   IMAGE: ghcr.io/hadyliu/iot-power-builder:latest
 
 jobs:
+  plan:
+    name: 判断是否跳过
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      skip: ${{ steps.p.outputs.skip }}
+    steps:
+      - id: p
+        # 同一提交同时推 main 和 v* tag 时，main 这次运行跳过，只由 tag 那次运行完整流程。
+        run: |
+          skip=false
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref_type }}" = "branch" ]; then
+            if git ls-remote --tags "https://github.com/${{ github.repository }}.git" 'v*' | grep -q "${{ github.sha }}"; then
+              skip=true
+              echo "提交 ${{ github.sha }} 已有 v* tag，本次运行跳过，由 tag 运行负责"
+            fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
   image:
     name: 编译镜像
+    needs: plan
+    if: needs.plan.outputs.skip != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
