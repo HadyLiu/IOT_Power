@@ -81,6 +81,21 @@ bash scripts/docker-build.sh        # Linux + Windows 产物 → dist/
 bash scripts/docker-build.sh check  # fmt + clippy + test 等
 ```
 
+### CI（GitHub Actions）
+
+只有一个工作流 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)，按顺序执行：
+
+1. **编译镜像**：只有 GHCR 上还没有 `ghcr.io/hadyliu/iot-power-builder:latest` 时才构建并推送（即第一次推送）；之后都直接复用。`packaging/docker/Dockerfile` 改动后，需在 Actions 页面手动触发并勾选 `rebuild_image` 重建。
+2. **检查**：在镜像内跑 `packaging/docker/check.sh`（fmt、clippy、test、Windows 交叉编译检查）。push 到 `main` 和 PR 都会执行。
+3. **构建发布**：仅推送 `v*` tag 时执行，跑 `packaging/docker/compile.sh`，产物（Linux `tar.gz`/`deb`、Windows `zip`、`SHA256SUMS`）上传为 Artifact 并发布到 GitHub Release。
+
+发版示例：
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
 ## 文档
 
 | 文档 | 内容 |

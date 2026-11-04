@@ -1,35 +1,88 @@
 name: CI
 
-# 在编译镜像里跑 fmt + clippy + test + Windows 交叉编译检查（与本机 scripts/docker-build.sh check 一致）。
+# 流程：image（GHCR 上没有编译镜像时才构建一次）→ check（fmt/clippy/test/Windows 检查）→ build（仅打 tag 时）。
+#   - push 到 main、PR：image → check
+#   - 推送 v* tag：image → check → build（产物上传并发布到 GitHub Release）
+#   - 手动触发：可勾选 rebuild_image 强制重建镜像（Dockerfile 改动后用）
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      rebuild_image:
+        description: "强制重建并推送编译镜像"
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  IMAGE: ghcr.io/hadyliu/iot-power-builder:latest
+
 jobs:
-  check:
+  image:
+    name: 编译镜像
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build builder image (cached)
+      - name: 检查镜像是否已存在
+        id: exists
+        run: |
+          if [ "${{ inputs.rebuild_image }}" = "true" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          elif docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "镜像 $IMAGE 已存在，跳过构建"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "镜像 $IMAGE 不存在，开始首次构建"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.exists.outputs.found == 'false'
+
+      - name: 构建并推送镜像
+        if: steps.exists.outputs.found == 'false'
         uses: docker/build-push-action@v6
         with:
           context: packaging/docker
           file: packaging/docker/Dockerfile
-          load: true
-          tags: iot-power-builder:ci
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          push: true
+          tags: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+  check:
+    name: 检查
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cache cargo and target
         uses: actions/cache@v4
@@ -38,10 +91,10 @@ jobs:
             .ci-cache/registry
             .ci-cache/git
             .ci-cache/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: cargo-${{ runner.os }}-
+          key: cargo-check-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-check-
 
-      - name: fmt, clippy, test, Windows check
+      - name: fmt、clippy、test、Windows 检查
         run: |
           mkdir -p .ci-cache/registry .ci-cache/git .ci-cache/target
           docker run --rm \
@@ -50,4 +103,51 @@ jobs:
             -v "$PWD/.ci-cache/git:/usr/local/cargo/git" \
             -v "$PWD/.ci-cache/target:/src/target" \
             -w /src \
-            iot-power-builder:ci bash packaging/docker/check.sh
+            "$IMAGE" bash packaging/docker/check.sh
+
+  build:
+    name: 构建发布
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 编译并打包（Linux tar.gz/deb、Windows zip）
+        run: |
+          mkdir -p dist
+          docker run --rm \
+            -v "$PWD:/src" \
+            -w /src \
+            -e "HOST_UID=$(id -u)" \
+            -e "HOST_GID=$(id -g)" \
+            "$IMAGE" bash packaging/docker/compile.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IOT_Power-${{ github.ref_name }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/SHA256SUMS
+
+      - name: 发布到 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/SHA256SUMS
+          generate_release_notes: true
