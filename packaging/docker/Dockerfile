@@ -1,14 +1,21 @@
 # 通用 Rust 编译镜像：同时编译 IOT_Power 与 Cross-SystemConnect（Linux x86_64 + Windows x86_64-pc-windows-gnu）。
-# 基础镜像 cross-systemconnect-packager 已含 Rust 1.98.1（Debian bookworm）、mingw-w64、GTK/WebKit 开发库；
-# 这里补上 IOT_Power 需要的部分。源码在运行时挂载到 /src，镜像里不放源码。
-#   bash scripts/docker-build.sh --image
-FROM cross-systemconnect-packager:latest
+# 自包含：直接基于官方 rust 镜像，本机与 GitHub Actions 用同一份 Dockerfile 构建，不再依赖本机私有的基础镜像。
+# 源码在运行时挂载到 /src，镜像里不放源码。
+#   本机：   bash scripts/docker-build.sh --image
+#   GitHub： .github/workflows/docker-image.yml 构建并推送到 ghcr.io/hadyliu/iot-power-builder
+FROM rust:1-bookworm
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential pkg-config zip \
+        gcc-mingw-w64-x86-64 \
         libudev-dev libusb-1.0-0-dev \
         libxkbcommon-dev libwayland-dev libgl1-mesa-dev \
         nsis \
+        libwebkit2gtk-4.1-dev libgtk-3-dev \
+        libx11-dev libxi-dev libxtst-dev libxfixes-dev libxrandr-dev \
+        libxdo-dev libayatana-appindicator3-dev \
     && rm -rf /var/lib/apt/lists/* \
+    && rustup target add x86_64-pc-windows-gnu \
     && rustup component add clippy rustfmt \
     && cargo install cargo-deb --locked --root /usr/local/cargo \
     && rm -rf /usr/local/cargo/registry /usr/local/cargo/git

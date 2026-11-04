@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 用编译镜像 rust-cross-builder 编译 IOT_Power 或 Cross-SystemConnect。
-# 镜像已存在则复用；不存在或传 --image 时才构建（基于 cross-systemconnect-packager:latest）。
+# 镜像已存在则复用；不存在或传 --image 时才构建（packaging/docker/Dockerfile，自包含，基于官方 rust 镜像）。
 #   bash scripts/docker-build.sh               # IOT_Power：Linux + Windows → dist/
 #   bash scripts/docker-build.sh check         # IOT_Power：fmt + clippy + test + Windows check
 #   bash scripts/docker-build.sh csc           # Cross-SystemConnect：Linux + Windows → <csc>/dist/
@@ -11,7 +11,6 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 image=rust-cross-builder:latest
-base=cross-systemconnect-packager:latest
 
 rebuild=0
 if [[ "${1:-}" == "--image" ]]; then
@@ -28,11 +27,7 @@ if [[ "$rebuild" -eq 0 ]] && ! docker image inspect "$image" >/dev/null 2>&1; th
   rebuild=1
 fi
 if [[ "$rebuild" -eq 1 ]]; then
-  if ! docker image inspect "$base" >/dev/null 2>&1; then
-    echo "Base image $base not found (build it in Cross-SystemConnect: bash scripts/package-docker.sh --image)" >&2
-    exit 1
-  fi
-  echo "Building image $image from $base"
+  echo "Building image $image from packaging/docker/Dockerfile"
   docker build -t "$image" packaging/docker
 else
   echo "Using existing image $image"

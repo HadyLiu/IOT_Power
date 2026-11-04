@@ -1,0 +1,53 @@
+name: CI
+
+# 在编译镜像里跑 fmt + clippy + test + Windows 交叉编译检查（与本机 scripts/docker-build.sh check 一致）。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build builder image (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: packaging/docker
+          file: packaging/docker/Dockerfile
+          load: true
+          tags: iot-power-builder:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Cache cargo and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-cache/registry
+            .ci-cache/git
+            .ci-cache/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: fmt, clippy, test, Windows check
+        run: |
+          mkdir -p .ci-cache/registry .ci-cache/git .ci-cache/target
+          docker run --rm \
+            -v "$PWD:/src" \
+            -v "$PWD/.ci-cache/registry:/usr/local/cargo/registry" \
+            -v "$PWD/.ci-cache/git:/usr/local/cargo/git" \
+            -v "$PWD/.ci-cache/target:/src/target" \
+            -w /src \
+            iot-power-builder:ci bash packaging/docker/check.sh
