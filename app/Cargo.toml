@@ -32,8 +32,8 @@ winresource = "0.1.31"
 
 [package.metadata.deb]
 name = "iot-power"
-maintainer = "IOT_Power developers"
-copyright = "IOT_Power developers"
+maintainer = "Hady Liu <hadyliu@outlook.com>"
+copyright = "2026 Hady Liu"
 extended-description = "Desktop controller for the DC3005U programmable power supply: setpoints, live charts, recording, auxiliary functions (sweep, sequence, function generator, battery simulation) and log analysis."
 section = "electronics"
 priority = "optional"

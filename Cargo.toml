@@ -6,7 +6,7 @@ members = ["crates/dc3005u-proto", "crates/dc3005u-usb", "app"]
 version = "0.2.0-dev"
 edition = "2024"
 rust-version = "1.95"
-license = "UNLICENSED"
+license = "MIT"
 
 [workspace.dependencies]
 dc3005u-proto = { path = "crates/dc3005u-proto" }
