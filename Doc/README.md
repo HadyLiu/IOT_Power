@@ -2,7 +2,7 @@
 
 基于 **Rust + egui/eframe** 的跨平台桌面上位机，用于控制 **DC3005U** 可编程电源 / 功耗分析仪：实时读取电压、电流、功率，绘制曲线、录制 CSV，设定输出并提供预设、序列、扫描等辅助功能。界面参考开源项目 [pd_pocket_pc_controller](https://github.com/ElluIFX/pd_pocket_pc_controller)，通信遵循 [协议文档](Communication/协议文档.md)。
 
-> 状态：开发中（workspace 版本 `0.2.0-dev`）。根目录 [README.md](../README.md) 有快速开始说明。
+> 状态：开发中（workspace 版本 `0.3.0`）。根目录 [README.md](../README.md) 有快速开始说明。
 
 ## 特性
 - USB 直连（WinUSB / libusb Bulk，VID `0x0408` PID `0x1043`），无需串口驱动

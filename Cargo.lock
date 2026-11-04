@@ -821,7 +821,7 @@ checksum = "f27ae1dd37df86211c42e150270f82743308803d90a6f6e6651cd730d5e1732f"
 
 [[package]]
 name = "dc3005u-proto"
-version = "0.2.0-dev"
+version = "0.3.0"
 dependencies = [
  "crc32fast",
  "serde",
@@ -830,7 +830,7 @@ dependencies = [
 
 [[package]]
 name = "dc3005u-usb"
-version = "0.2.0-dev"
+version = "0.3.0"
 dependencies = [
  "crossbeam-channel",
  "dc3005u-proto",
@@ -1764,7 +1764,7 @@ dependencies = [
 
 [[package]]
 name = "iot-power"
-version = "0.2.0-dev"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "crossbeam-channel",

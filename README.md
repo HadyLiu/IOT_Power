@@ -2,7 +2,7 @@
 
 基于 **Rust + egui/eframe** 的跨平台桌面上位机，用于控制 **DC3005U** 可编程电源 / 功耗分析仪：实时读取电压、电流、功率，绘制曲线、录制数据，设定输出，并提供预设、序列、扫描、函数发生器、电池模拟等辅助功能。
 
-当前版本：`0.2.0-dev`（见 workspace `Cargo.toml`）。仓库：https://github.com/HadyLiu/IOT_Power
+当前版本：`0.3.0`（见 workspace `Cargo.toml`）。仓库：https://github.com/HadyLiu/IOT_Power
 
 > 更完整的产品与设计文档在 [`Doc/`](Doc/README.md)。界面曾参考开源项目 [pd_pocket_pc_controller](https://github.com/ElluIFX/pd_pocket_pc_controller)；设备通信见 [协议文档](Doc/Communication/协议文档.md)。
 
@@ -92,8 +92,8 @@ bash scripts/docker-build.sh check  # fmt + clippy + test 等
 发版示例：
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 ## 文档
